@@ -1,0 +1,14 @@
+name: leonardo_da_vqgan
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - poetry
+  - pytorch=1.8.0
+  - cudatoolkit=11.1
+  - pytorch-lightning
+  - torchaudio
+  - torchmetrics
+  - torchvision

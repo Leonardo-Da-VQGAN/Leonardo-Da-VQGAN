@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "leonardo_da_vqgan"
+version = "0.1.0"
+description = ""
+license = "MIT"
+authors = ["Mazen Alotaibi <alotaima@oregonstate.edu>"]
+readme = 'README.md'
+repository = "https://github.com/Leonardo-Da-VQGAN/Leonardo-Da-VQGAN"
+homepage = "https://github.com/Leonardo-Da-VQGAN/Leonardo-Da-VQGAN"
+keywords = ['pytorch', 'pytorch-lightning']
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/Leonardo-Da-VQGAN/Leonardo-Da-VQGAN/issues"
+"Changelog" = "https://github.com/Leonardo-Da-VQGAN/Leonardo-Da-VQGAN/blob/master/CHANGELOG.md"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+PyYAML = "^6.0"
+tensorboard = "^2.7.0"
+jupyter = "^1.0.0"
+albumentations = "^1.1.0"
+# pip
+# pandas
+fire = "^0.4.0"
+tqdm = "^4.62.3"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.5"
+pylint = "^2.11.1"
+autopep8 = "^1.6.0"
+visdom = "^0.1.8"
+jsonpatch = "^1.32"
+rich = "^10.12.0"
+wandb = "^0.12.6"
+poethepoet = "^0.10.0"
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 120 # override the default of 88
+
+[tool.poe.tasks]
+train = "python scripts/train.py"
+test = "python scripts/test.py"
+pytest = "pytest tests"
