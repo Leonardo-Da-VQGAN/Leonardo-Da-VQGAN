@@ -1,14 +1,16 @@
 import importlib
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
+import pytorch_lightning as pl
 
 # from taming.modules.diffusionmodules.model import Encoder, Decoder
 # from taming.modules.vqvae.quantize import VectorQuantizer2 as VectorQuantizer
 # from taming.modules.vqvae.quantize import GumbelQuantize
 # from taming.modules.vqvae.quantize import EMAVectorQuantizer
 
-from diffusion_models import Encoder, Decoder
-from quantize import VectorQuantizer
+from leonardo_da_vqgan.models.diffusion_models import Encoder, Decoder
+from leonardo_da_vqgan.models.quantize import VectorQuantizer
 
 def instantiate_from_config(config):
     if not "target" in config:
@@ -22,7 +24,7 @@ def get_obj_from_str(string, reload=False):
         importlib.reload(module_imp)
     return getattr(importlib.import_module(module, package=None), cls)
 
-class VQModel(torch.nn.Module):
+class VQModel(pl.LightningModule):
     def __init__(self,
                  ddconfig,
                  lossconfig,
@@ -34,9 +36,11 @@ class VQModel(torch.nn.Module):
                  colorize_nlabels=None,
                  monitor=None,
                  remap=None,
+                 lr=4.5e-6,
                  sane_index_shape=False,  # tell vector quantizer to return indices as bhw (breadth, height, width?)
                  ):
         super().__init__()
+        self.learning_rate = lr
         self.image_key = image_key
         self.encoder = Encoder(**ddconfig) # TODO: build manually
         self.decoder = Decoder(**ddconfig) # TODO: build manually
@@ -102,18 +106,17 @@ class VQModel(torch.nn.Module):
 
     # get K'th sample from batch, reshape to contiguous float tensor
     def get_input(self, batch, k):
-        x = batch[k]
+        x = batch
         if len(x.shape) == 3:
             x = x[..., None]
-        x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format)
+        x = x.permute(0, 1, 2, 3).to(memory_format=torch.contiguous_format)
         return x.float()
 
     def training_step(self, batch, batch_idx, optimizer_index):
         x = self.get_input(batch, self.image_key)
         xrec , qloss = self(x) # call forward on the input image
-
         if optimizer_index == 0:
-            # autoencode, compute auto_encode loss (#TODO: understand this by building `instantiate_from_config()`)
+            # autoencode, compute auto_encode loss
             aeloss, log_dict_ae = self.loss(qloss, x, xrec, optimizer_index, self.global_step, last_layer=self.get_last_layer(), split="train")
 
             # log the loss (pytorch lightnight by default, redo in vanilla pytorch)
@@ -122,7 +125,7 @@ class VQModel(torch.nn.Module):
             return aeloss
         
         if optimizer_index == 1:
-            # discriminator
+            # discriminator loss
             discloss, log_dict_disc = self.loss(qloss, x, xrec, optimizer_index, self.global_step,last_layer=self.get_last_layer(), split="train")
 
             # self.log("train/discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)

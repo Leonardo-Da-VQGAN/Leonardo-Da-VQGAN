@@ -58,7 +58,7 @@ class Downsample(nn.Module):
         return x
 
 # Residual blocks takes activation_1, computes activation_2 from activation_1, and returns [activation_2 + activation_1]
-class ResnetBlock(nn.module):
+class ResnetBlock(nn.Module):
     def __init__(self, *, in_channels, out_channels=None, conv_shortcut=False,
                  dropout, temb_channels=512):
         super().__init__()

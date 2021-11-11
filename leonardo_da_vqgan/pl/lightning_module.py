@@ -14,6 +14,7 @@ import pytorch_lightning as pl
 import torchmetrics
 import torch.nn.functional as F
 from leonardo_da_vqgan.models.simple_classifier import Model
+
 class LitModel(pl.LightningModule):
     def __init__(self, input_shape, num_classes, data_len, learning_rate,chkpt_path=""):
         super().__init__()
@@ -80,7 +81,7 @@ class LitModel(pl.LightningModule):
     #
     #   on_train_epoch_end()
     # on_train_end
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx):
         return self._step(batch, "train")
 
     def validation_step(self, batch, batch_idx):
