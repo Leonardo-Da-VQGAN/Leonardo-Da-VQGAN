@@ -30,13 +30,18 @@ model:
         codebook_weight: 1.0
 
 data:
-  target: main.DataModuleFromConfig
+  target: leonardo_da_vqgan.data.datasets.pokemon.Pokemon
   params:
-    batch_size: 5
+    batch_size: 12
     num_workers: 8
     max_epoch: 1000
     train:
-      target: taming.data.custom.CustomTrain
+      target: leonardo_da_vqgan.data.datasets.pokemon.PokemonDataset
       params:
-        training_images_list_dir: ./data/gen3sprites
-        size: 256
+        root: ./data 
+        train: True
+    validation:
+      target: leonardo_da_vqgan.data.datasets.pokemon.PokemonDataset
+      params:
+        root: ./data 
+        train: False

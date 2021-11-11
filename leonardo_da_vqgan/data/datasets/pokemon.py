@@ -39,15 +39,16 @@ class PokemonDataset(Dataset):
         return f"{self.root}"
  
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        # print(len(self.set), idx)
         if self.train:
             img_path = f"{self.root}/gen3sprites/{self.set['img_id'].iloc[idx]}"
         else:
             img_path = f"{self.root}/gen3shinies/{self.set['img_id'].iloc[idx]}"
 
         img = Image.open(img_path).convert('RGB')
+        target = Image.open(img_path).convert('RGB')
         if self.transforms is not None:
             img = self.transforms(img)
+            target = self.transforms(target)
         return img
 
     def __len__(self) -> int:
@@ -59,23 +60,21 @@ class Pokemon(pl.LightningDataModule):
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.dims = (4, 64, 64)
+        self.dims = (3, 64, 64)
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
 
     # def prepare_data(self):
-        # CIFAR10(self.data_dir, train=True, download=True)
-        # CIFAR10(self.data_dir, train=False, download=True)
+    #     PokemonDataset(self.data_dir, train=True, download=True)
+    #     PokemonDataset(self.data_dir, train=False, download=True)
 
     def setup(self, stage: Optional[str] = None):
         if stage == "fit" or stage is None:
-            
             dataset_full = PokemonDataset(self.data_dir, batch_size=self.batch_size,
                                    transforms=self.transform, train=True)
-            self.dataset_train, self.dataset_val = random_split(
-                dataset_full, [319, 100])
+            self.dataset_train, self.dataset_val = random_split(dataset_full, [218, 200])
 
         if stage == "test" or stage is None:
             self.dataset_test = PokemonDataset(self.data_dir, batch_size=self.batch_size,

@@ -1,4 +1,5 @@
 import os, argparse, datetime
+import importlib
 import random
 import string
 import yaml
@@ -19,9 +20,10 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from omegaconf import OmegaConf
 from leonardo_da_vqgan.utils import utils
 
-from leonardo_da_vqgan.models.vqgan import VQModel, instantiate_from_config
+from leonardo_da_vqgan.models.vqgan import VQModel
 
 from leonardo_da_vqgan.data.datasets.pokemon import Pokemon
+from leonardo_da_vqgan.utils.utils import instantiate_from_config
 
 def get_parser(**parser_kwargs):
     def str2bool(v):
@@ -106,6 +108,12 @@ def get_parser(**parser_kwargs):
 
     return parser
 
+def nondefault_trainer_args(opt):
+    parser = argparse.ArgumentParser()
+    parser = Trainer.add_argparse_args(parser)
+    args = parser.parse_args([])
+    return sorted(k for k in vars(args) if getattr(opt, k) != getattr(args, k))
+
 def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str = "model"):
     now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     # seed
@@ -119,49 +127,102 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
     print(device)
     # args
     print(config_path)
-    config = yaml.load(open(config_path), Loader=yaml.FullLoader)
     
+    # define the argument parse
     parser = get_parser()
     parser = Trainer.add_argparse_args(parser)
-    opt, unknown = parser.parse_known_args()
     
-    if opt.name:
-        name = "_"+opt.name
-    elif opt.base:
-        cfg_fname = os.path.split(opt.base[0])[-1]
+    # get arguments
+    parsed_args, unknown = parser.parse_known_args()
+    configs = [OmegaConf.load(cfg) for cfg in parsed_args.base]
+    cli = OmegaConf.from_dotlist(unknown)
+    config = OmegaConf.merge(*configs, cli)
+
+    # set up model name
+    if parsed_args.name:
+        name = "_"+parsed_args.name
+    elif parsed_args.base:
+        cfg_fname = os.path.split(parsed_args.base[0])[-1]
         cfg_name = os.path.splitext(cfg_fname)[0]
         name = "_"+cfg_name
     else:
         name = ""
-    nowname = now+name+opt.postfix
-    logdir = os.path.join("logs", nowname)
+    nowname = now+name+parsed_args.postfix
 
+    # set up directories
+    logdir = os.path.join("logs", nowname)
+    ckptdir = os.path.join(logdir, "checkpoints")
+    cfgdir = os.path.join(logdir, "configs")
+    
+    # set up overall and trainer configs
+    lightning_config = config.pop("lightning", OmegaConf.create())
+    trainer_config = lightning_config.get("trainer", OmegaConf.create())
+    for k in nondefault_trainer_args(parsed_args):
+        trainer_config[k] = getattr(parsed_args, k)
+    
+    # confirm gpu count
+    gpuinfo = trainer_config["gpus"]
+    cpu = False
+    print(f"Running on GPUs {gpuinfo}")
+   
+    # get trainer args
+    trainer_args = argparse.Namespace(**trainer_config)
+    lightning_config.trainer = trainer_config
+
+    # instantiate vqgan model
+    vqmodel = instantiate_from_config(config.model)
+    
+    trainer_kwargs = dict()
+    # logger config setup
     default_logger_cfgs = {
         "wandb": {
             "target": "pytorch_lightning.loggers.WandbLogger",
             "params": {
                 "name": nowname,
                 "save_dir": logdir,
-                "offline": opt.debug,
+                "offline": parsed_args.debug,
                 "id": nowname,
             }
         },
     }
-    ckptdir = os.path.join(logdir, "checkpoints")
-    cfgdir = os.path.join(logdir, "configs")
-    seed_everything(opt.seed)
+    
+    # get logger configs
+    default_logger_cfg = default_logger_cfgs["wandb"]
+    logger_cfg = OmegaConf.create()
+    logger_cfg = OmegaConf.merge(default_logger_cfg, logger_cfg)
+    trainer_kwargs["logger"] = instantiate_from_config(logger_cfg)
 
-    trainer_config = lightning_config.get("trainer", OmegaConf.create())
+    # define default checkpoint config
+    default_modelckpt_cfg = {
+            "target": "pytorch_lightning.callbacks.ModelCheckpoint",
+            "params": {
+                "dirpath": ckptdir,
+                "filename": "{epoch:06}",
+                "verbose": True,
+                "save_last": True,
+            }
+        }
+    
+    if hasattr(vqmodel, "monitor"):
+        print(f"Monitoring {vqmodel.monitor} as checkpoint metric.")
+        default_modelckpt_cfg["params"]["monitor"] = vqmodel.monitor
+        default_modelckpt_cfg["params"]["save_top_k"] = 3
+    # instantiate checkpoint configs
+    modelckpt_cfg = OmegaConf.create()
+    modelckpt_cfg = OmegaConf.merge(default_modelckpt_cfg, modelckpt_cfg)
+    trainer_kwargs["checkpoint_callback"] = instantiate_from_config(modelckpt_cfg)
 
+    # define data paths
     data_path = config['DATA_PATH']
     output_path = config["OUTPUT_PATH"]
     project = config["PROJECT"]
 
-    # hypterparamters
+    # hyperparamters
     batch_size = int(config["data"]['params']['batch_size'])
     num_workers = int(config['data']['params']['num_workers'])
     learning_rate = float(config['model']["base_learning_rate"])
     max_epoch = int(config['data']['params']['max_epoch'])
+
     gpus = 1
     print(f"BatchSize:{batch_size} - Workers:{num_workers} - LR:{learning_rate} - MaxEpochs:{max_epoch}")
     # https://github.com/tchaton/lightning-geometric/blob/master/examples/utils/loggers.py
@@ -173,38 +234,80 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
     logger = f"{output_path}/logs/{experiment}"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-
-    # loggers
-    wandb.login()
-    tb_logger = loggers.TensorBoardLogger(save_dir=logger)
-    wandb_logger = loggers.WandbLogger(
-        project=project, log_model="all", name=experiment)
     
     # data
     dataset = Pokemon(data_path, batch_size=batch_size, num_workers=num_workers)
     # dataset.prepare_data()
     dataset.setup()
 
-    val_images = next(iter(dataset.val_dataloader()))
+    # add callback which sets up log directory
+    default_callbacks_cfg = {
+        "setup_callback": {
+            "target": "leonardo_da_vqgan.utils.utils.SetupCallback",
+            "params": {
+                "resume": parsed_args.resume,
+                "now": now,
+                "logdir": logdir,
+                "ckptdir": ckptdir,
+                "cfgdir": cfgdir,
+                "config": config,
+                "lightning_config": lightning_config,
+            }
+        },
+        "image_logger": {
+            "target": "leonardo_da_vqgan.utils.utils.ImageLogger",
+            "params": {
+                "batch_frequency": 50,
+                "max_images": 5,
+                "clamp": True
+            }
+        },
+        "learning_rate_logger": {
+            "target": "pytorch_lightning.callbacks.LearningRateMonitor",
+            "params": {
+                "logging_interval": "step",
+            }
+        },
+    }
+    # instantiate callback configs
+    callbacks_cfg = OmegaConf.create()
+    callbacks_cfg = OmegaConf.merge(default_callbacks_cfg, callbacks_cfg)
+    trainer_kwargs["callbacks"] = [instantiate_from_config(callbacks_cfg[k]) for k in callbacks_cfg]
 
-    # model
-    vqmodel = instantiate_from_config(config['model'])
+    # instantiate trainer
+    trainer = Trainer.from_argparse_args(trainer_args, **trainer_kwargs)
+    trainer.log_every_n_steps = 13
+
+    # configure learning rate
+    bs, base_lr = config.data.params.batch_size, config.model.base_learning_rate
+    if not cpu:
+        ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
+    else:
+        ngpu = 1
+    accumulate_grad_batches = 1
+    print(f"accumulate_grad_batches = {accumulate_grad_batches}")
+    lightning_config.trainer.accumulate_grad_batches = accumulate_grad_batches
+    vqmodel.learning_rate = accumulate_grad_batches * ngpu * bs * base_lr
+    print("Setting learning rate to {:.2e} = {} (accumulate_grad_batches) * {} (num_gpus) * {} (batchsize) * {:.2e} (base_lr)".format(
+        vqmodel.learning_rate, accumulate_grad_batches, ngpu, bs, base_lr))
+   
     # vqmodel.eval().requires_grad_(False)
-    
-    wandb_logger.watch(vqmodel)
-    _loggers = [tb_logger, wandb_logger]
-    _callbacks = [ModelCheckpoint(dirpath=output_dir), utils.ImagePredictionLogger(val_images),LearningRateMonitor(logging_interval='step')]
-    
-    # trainer
-    trainer = pl.Trainer(
-        logger=_loggers,
-        callbacks=_callbacks,
-        gpus=gpus,
-        max_epochs=max_epoch,
-        progress_bar_refresh_rate=20
-    )
-    trainer.fit(vqmodel, dataset)
+    def melk(*args, **kwargs):
+        # run all checkpoint hooks
+        if trainer.global_rank == 0:
+            print("Summoning checkpoint.")
+            ckpt_path = os.path.join(ckptdir, "last.ckpt")
+            trainer.save_checkpoint(ckpt_path)
 
+    if parsed_args.train:
+        try:
+            trainer.fit(vqmodel, dataset)
+        except Exception:
+            melk()
+            raise
+    if not parsed_args.no_test and not trainer.interrupted:
+        trainer.test(vqmodel, dataset)
+    
 
 if __name__ == '__main__':
     fire.Fire(train)
