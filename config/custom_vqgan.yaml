@@ -32,9 +32,9 @@ model:
 data:
   target: leonardo_da_vqgan.data.datasets.pokemon.Pokemon
   params:
-    batch_size: 12
-    num_workers: 8
-    max_epoch: 1000
+    batch_size: 24
+    num_workers: 12
+    max_epoch: 2000
     train:
       target: leonardo_da_vqgan.data.datasets.pokemon.PokemonDataset
       params:

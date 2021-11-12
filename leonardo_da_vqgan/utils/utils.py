@@ -5,15 +5,15 @@ import wandb
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 import hashlib
+import errno
 import requests
 from tqdm import tqdm
 import importlib
 from omegaconf import OmegaConf
 import PIL
 from PIL import Image
-import numpy as np
+import numpy as np, cv2
 import torchvision
-from numpy import cv2
 
 URL_MAP = {
     "vgg_lpips": "https://heibox.uni-heidelberg.de/f/607503859c864bc1b30b/?dl=1"
@@ -114,10 +114,20 @@ class ImageLogger(Callback):
             self.log_steps = [self.batch_freq]
         self.clamp = clamp
 
+    def tensor_to_image(self, tensor):
+        tensor = tensor*255
+        array = np.array(tensor.permute(1,2,0), dtype=np.uint8)
+        if np.ndim(array) > 3:
+            assert array.shape[0] == 1
+            array = array[0]
+        return PIL.Image.fromarray(array)
+
     def _wandb(self, pl_module, images, batch_idx, split):
         grids = dict()
         for k in images:
             grid = torchvision.utils.make_grid(images[k])
+            grid = self.tensor_to_image(grid)
+
             grids[f"{split}/{k}"] = wandb.Image(grid)
         pl_module.logger.experiment.log(grids)
 
@@ -132,9 +142,10 @@ class ImageLogger(Callback):
                 tag, grid,
                 global_step=pl_module.global_step)
 
-    def log_local(self, save_dir, split, images,
+    def log_local(self, pl_module, save_dir, split, images,
                   global_step, current_epoch, batch_idx):
         root = os.path.join(save_dir, "images", split)
+        grids = dict()
         for k in images:
             grid = torchvision.utils.make_grid(images[k], nrow=4)
 
@@ -150,6 +161,10 @@ class ImageLogger(Callback):
             path = os.path.join(root, filename)
             os.makedirs(os.path.split(path)[0], exist_ok=True)
             Image.fromarray(grid).save(path)
+            grids[f"{split}/{k}"] = wandb.Image(path)
+
+        pl_module.logger.experiment.log(grids)
+        
 
     def log_img(self, pl_module, batch, batch_idx, split="train"):
         if (self.check_frequency(batch_idx) and  # batch_idx % self.batch_freq == 0
@@ -173,11 +188,11 @@ class ImageLogger(Callback):
                     if self.clamp:
                         images[k] = torch.clamp(images[k], -1., 1.)
 
-            self.log_local(pl_module.logger.save_dir, split, images,
+            self.log_local(pl_module, pl_module.logger.save_dir, split, images,
                            pl_module.global_step, pl_module.current_epoch, batch_idx)
 
-            logger_log_images = self.logger_log_images.get(logger, lambda *args, **kwargs: None)
-            logger_log_images(pl_module, images, pl_module.global_step, split)
+            # logger_log_images = self.logger_log_images.get(logger, lambda *args, **kwargs: None)
+            # logger_log_images(pl_module, images, pl_module.global_step, split)
 
             if is_train:
                 pl_module.train()
@@ -203,16 +218,21 @@ class ImagePredictionLogger(Callback):
         self.num_samples = num_samples
         self.val_imgs = torch.FloatTensor(val_samples)
 
-    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
-        val_imgs = self.val_imgs.to(device=pl_module.device)
+    # def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+    #     val_imgs = self.val_imgs.to(device=pl_module.device)
 
-        logits = pl_module(val_imgs)[0]
-        preds = torch.argmax(logits, 1)
-        trainer.logger.experiment.log({
-            "examples": [wandb.Image(x, caption=f"Pred:{pred}") 
-                            for x, pred in zip(val_imgs, preds)],
-            "global_step": trainer.global_step
-            })
+    #     logits = pl_module(val_imgs)[0]
+    #     trainer.logger.experiment.log({
+    #         "examples": [wandb.Image(x, caption=f"Pred:{pred}") 
+    #                         for x, pred in zip(val_imgs)],
+    #         "global_step": trainer.global_step
+    #         })
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.log_img(pl_module, batch, batch_idx, split="train")
+
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.log_img(pl_module, batch, batch_idx, split="val")
 
 def collate_fn(batch: List[torch.Tensor]) -> Tuple[Tuple[torch.Tensor]]:
     """[summary]

@@ -1,4 +1,5 @@
 import os, argparse, datetime
+import time
 import importlib
 import random
 import string
@@ -23,7 +24,7 @@ from leonardo_da_vqgan.utils import utils
 from leonardo_da_vqgan.models.vqgan import VQModel
 
 from leonardo_da_vqgan.data.datasets.pokemon import Pokemon
-from leonardo_da_vqgan.utils.utils import instantiate_from_config
+from leonardo_da_vqgan.utils.utils import instantiate_from_config, mkdir
 
 def get_parser(**parser_kwargs):
     def str2bool(v):
@@ -117,10 +118,10 @@ def nondefault_trainer_args(opt):
 def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str = "model"):
     now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     # seed
-    pl.seed_everything(1)
-    np.random.seed(1)
-    torch.manual_seed(1)
-    torch.cuda.manual_seed(1)
+    pl.seed_everything(int(time.time()))
+    np.random.seed(int(time.time()))
+    torch.manual_seed(int(time.time()))
+    torch.cuda.manual_seed(int(time.time()))
     # config
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.cuda.empty_cache()
@@ -151,8 +152,11 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
 
     # set up directories
     logdir = os.path.join("logs", nowname)
+    mkdir(logdir)
     ckptdir = os.path.join(logdir, "checkpoints")
+    mkdir(ckptdir)
     cfgdir = os.path.join(logdir, "configs")
+    mkdir(ckptdir)
     
     # set up overall and trainer configs
     lightning_config = config.pop("lightning", OmegaConf.create())
@@ -258,7 +262,7 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
             "target": "leonardo_da_vqgan.utils.utils.ImageLogger",
             "params": {
                 "batch_frequency": 50,
-                "max_images": 5,
+                "max_images": 12,
                 "clamp": True
             }
         },
@@ -276,7 +280,7 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
 
     # instantiate trainer
     trainer = Trainer.from_argparse_args(trainer_args, **trainer_kwargs)
-    trainer.log_every_n_steps = 13
+    trainer.log_every_n_steps = 12
 
     # configure learning rate
     bs, base_lr = config.data.params.batch_size, config.model.base_learning_rate
