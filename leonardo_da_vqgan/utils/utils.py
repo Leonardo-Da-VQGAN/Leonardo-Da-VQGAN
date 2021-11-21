@@ -212,6 +212,9 @@ class ImageLogger(Callback):
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         self.log_img(pl_module, batch, batch_idx, split="val")
 
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.log_img(pl_module, batch, batch_idx, split="test")
+
 class ImagePredictionLogger(Callback):
     def __init__(self, val_samples, num_samples=32):
         super().__init__()
@@ -233,6 +236,9 @@ class ImagePredictionLogger(Callback):
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         self.log_img(pl_module, batch, batch_idx, split="val")
+
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.log_img(pl_module, batch, batch_idx, split="test")
 
 def collate_fn(batch: List[torch.Tensor]) -> Tuple[Tuple[torch.Tensor]]:
     """[summary]

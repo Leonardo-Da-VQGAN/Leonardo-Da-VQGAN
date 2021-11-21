@@ -37,7 +37,7 @@ class PokemonDataset(Dataset):
             else:
                 self.set = pd.read_csv(f"{root}/gen3and4sprites/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
         else:
-            self.set = pd.read_csv(f"{root}/gen4_shiny2/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
+            self.set = pd.read_csv(f"{root}/test_set/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
 
         self.len = self.set.shape[0]
 
@@ -51,7 +51,7 @@ class PokemonDataset(Dataset):
             else:
                 img_path = f"{self.root}/gen3and4sprites/{self.set['img_id'].iloc[idx]}"
         else:
-            img_path = f"{self.root}/gen4_shiny2/{self.set['img_id'].iloc[idx]}"
+            img_path = f"{self.root}/test_set/{self.set['img_id'].iloc[idx]}"
 
 
         img = Image.open(img_path).convert('RGB')
@@ -59,6 +59,7 @@ class PokemonDataset(Dataset):
             img = self.transforms(img)
             img = F.interpolate(img.unsqueeze(0), (80))
             img = img.squeeze(0)
+
         return img
 
     def __len__(self) -> int:
@@ -95,10 +96,10 @@ class Pokemon(pl.LightningDataModule):
         return DataLoader(self.dataset_train, shuffle=True, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.dataset_val, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.dataset_val, shuffle=True, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers=self.num_workers)    
+        return DataLoader(self.dataset_test, shuffle=True, batch_size=self.batch_size, num_workers=self.num_workers)
 
 
     def __len__(self) -> int:

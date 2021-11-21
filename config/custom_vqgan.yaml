@@ -7,7 +7,8 @@ model:
   target: leonardo_da_vqgan.models.vqgan.VQModel
   params:
     embed_dim: 256
-    n_embed: 1024
+    n_embed: 16384
+    monitor: val/rec_loss
     ddconfig:
       double_z: False
       z_channels: 256
@@ -25,8 +26,9 @@ model:
       params:
         disc_conditional: False
         disc_in_channels: 3
-        disc_start: 10000
+        disc_start: 250001
         disc_weight: 0.8
+        disc_num_layers: 2
         codebook_weight: 1.0
 
 data:
@@ -41,6 +43,11 @@ data:
         root: ./data 
         train: True
     validation:
+      target: leonardo_da_vqgan.data.datasets.pokemon.PokemonDataset
+      params:
+        root: ./data 
+        train: False
+    test:
       target: leonardo_da_vqgan.data.datasets.pokemon.PokemonDataset
       params:
         root: ./data 
