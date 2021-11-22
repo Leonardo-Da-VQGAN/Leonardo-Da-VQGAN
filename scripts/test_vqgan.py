@@ -307,7 +307,7 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
             trainer.save_checkpoint(ckpt_path)
 
     if not parsed_args.no_test and not trainer.interrupted:
-        vqmodel.init_from_ckpt("/home/zshureih/Documents/Leonardo-Da-VQGAN/logs/epoch=0-step=64.ckpt")
+        vqmodel.init_from_ckpt("/home/zshureih/Documents/Leonardo-Da-VQGAN/logs/pokemon_from_imagenet/Leonardo-Da-VQGAN-scripts/2021-11-14T15-05-58_custom_vqgan/checkpoints/epoch=401-step=26129.ckpt")
 
         trainer.test(vqmodel, dataset)
     
