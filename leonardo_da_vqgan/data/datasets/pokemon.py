@@ -73,7 +73,7 @@ class Pokemon(pl.LightningDataModule):
         self.transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.RandomApply([transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2)], p=0.5),
+            #transforms.RandomApply([transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2)], p=0.5),
             transforms.Resize((80,80)),
             transforms.Normalize([0.485,0.456,0.406],
                             [0.229,0.224,0.225]),
