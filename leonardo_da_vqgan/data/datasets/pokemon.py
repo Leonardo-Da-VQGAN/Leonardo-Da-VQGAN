@@ -33,9 +33,9 @@ class PokemonDataset(Dataset):
         set_names = ['img_id']
         if self.train:
             if self.val:
-                self.set = pd.read_csv(f"{root}/gen3and4shinies/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
+                self.set = pd.read_csv(f"{root}/test_set/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
             else:
-                self.set = pd.read_csv(f"{root}/gen3and4sprites/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
+                self.set = pd.read_csv(f"{root}/all_sprites/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
         else:
             self.set = pd.read_csv(f"{root}/test_set/gt.txt", usecols=range(0,len(set_names)), names=set_names, header=None)
 
@@ -47,9 +47,9 @@ class PokemonDataset(Dataset):
     def __getitem__(self, idx: int) -> torch.Tensor:
         if self.train:
             if self.val:
-                img_path = f"{self.root}/gen3and4shinies/{self.set['img_id'].iloc[idx]}"
+                img_path = f"{self.root}/test_set/{self.set['img_id'].iloc[idx]}"
             else:
-                img_path = f"{self.root}/gen3and4sprites/{self.set['img_id'].iloc[idx]}"
+                img_path = f"{self.root}/all_sprites/{self.set['img_id'].iloc[idx]}"
         else:
             img_path = f"{self.root}/test_set/{self.set['img_id'].iloc[idx]}"
 
@@ -57,8 +57,6 @@ class PokemonDataset(Dataset):
         img = Image.open(img_path).convert('RGB')
         if self.transforms is not None:
             img = self.transforms(img)
-            img = F.interpolate(img.unsqueeze(0), (80))
-            img = img.squeeze(0)
 
         return img
 
@@ -73,8 +71,12 @@ class Pokemon(pl.LightningDataModule):
         self.num_workers = num_workers
         self.dims = (3, 80, 80)
         self.transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.RandomApply([transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2)], p=0.5),
+            transforms.Resize((80,80)),
+            transforms.Normalize([0.485,0.456,0.406],
+                            [0.229,0.224,0.225]),
         ])
 
     # def prepare_data(self):
