@@ -245,7 +245,7 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
     # data
     dataset = Pokemon(data_path, batch_size=batch_size, num_workers=num_workers)
     # dataset.prepare_data()
-    dataset.setup()
+    dataset.setup("test")
 
     # add callback which sets up log directory
     default_callbacks_cfg = {
@@ -282,7 +282,6 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
     trainer_kwargs["callbacks"] = [instantiate_from_config(callbacks_cfg[k]) for k in callbacks_cfg]
 
     # instantiate trainer
-    print(trainer_args)
     trainer = Trainer.from_argparse_args(trainer_args, **trainer_kwargs)
     trainer.log_every_n_steps = 12
 
@@ -307,14 +306,8 @@ def train(config_path: str = os.getcwd()+"/config/custom_vqgan.yaml", job: str =
             ckpt_path = os.path.join(ckptdir, "last.ckpt")
             trainer.save_checkpoint(ckpt_path)
 
-    if parsed_args.train:
-        try:
-            trainer.fit(vqmodel, dataset)
-        except Exception:
-            melk()
-            raise
     if not parsed_args.no_test and not trainer.interrupted:
-        vqmodel.init_from_ckpt("/home/zshureih/Documents/Leonardo-Da-VQGAN/logs/pokemon_from_imagenet/Leonardo-Da-VQGAN-scripts/2021-11-14T15-05-58_custom_vqgan/checkpoints/epoch=401-step=26129.ckpt")
+        vqmodel.init_from_ckpt("/home/zshureih/Documents/Leonardo-Da-VQGAN/logs/epoch=0-step=64.ckpt")
 
         trainer.test(vqmodel, dataset)
     
